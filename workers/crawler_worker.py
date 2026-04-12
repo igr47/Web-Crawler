@@ -1,7 +1,11 @@
-# workers/crawler_worker.py
 from celery import Celery
 from datetime import datetime
 import logging
+import json
+import sys
+import os
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -27,7 +31,7 @@ celery_app.conf.update(
 @celery_app.task(name='crawler.crawl_all_sources')
 def crawl_all_sources():
     """Task to crawl all news sources"""
-    from database.connection import get_db_session
+    from database.connections import get_db_session
     from crawlers.news_crawler import NewsCrawler
     from crawlers.sentiment_analyzer import SentimentAnalyzer
     from processors.category_classifier import CategoryClassifier
@@ -35,7 +39,7 @@ def crawl_all_sources():
     from config import config
     
     db = get_db_session()
-    sentiment_analyzer = SentimentAnalyzer(use_deep_learning=False)
+    sentiment_analyzer = SentimentAnalyzer()
     classifier = CategoryClassifier()
     crawler = NewsCrawler(db, sentiment_analyzer, config)
     

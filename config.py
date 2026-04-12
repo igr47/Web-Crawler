@@ -10,12 +10,12 @@ class Config:
     if USE_SQLITE:
         DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./news_sentiment.db")
     else:
-        DATABASE_URL = os.getenv("DATABASE_URL","postresql://user:pass@localhost/news_sentiment")
+        DATABASE_URL = os.getenv("DATABASE_URL","postgresql://user:pass@localhost/news_sentiment")
     REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
     # Crawler settings
     USER_AGENT = "NewsSentimentCrawler/1.0"
-    REQUESTS_DELAY = 1 #seconds
+    REQUEST_DELAY = 1 #seconds
     MAX_CONCURRENT_REQUESTS = 5
     REQUEST_TIMEOUT = 30
 
