@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>News Reader</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            background: #f5f5f5;
+            color: #1a1a1a;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px 0;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            text-align: center;
+            font-size: 24px;
+        }
+
+        .header p {
+            text-align: center;
+            opacity: 0.9;
+            font-size: 14px;
+            margin-top: 5px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .status-bar {
+            background: #fff3cd;
+            border: 1px solid #ffeeba;
+            color: #856404;
+            padding: 12px 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            display: none;
+        }
+
+        .status-bar.show {
+            display: block;
+        }
+
+        .filters {
+            background: white;
+            padding: 15px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .filters select, .filters input {
+            padding: 10px 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            flex: 1;
+            min-width: 120px;
+        }
+
+        .filters button {
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+
+        .filters button:hover {
+            background: #5a67d8;
+        }
+
+        .stats {
+            background: white;
+            padding: 12px 15px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            color: #666;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .refresh-btn {
+            background: #48bb78;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .refresh-btn:hover {
+            background: #38a169;
+        }
+
+        .article-list {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .article-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .article-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        .article-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: #1a1a1a;
+            line-height: 1.4;
+        }
+
+        .article-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 10px;
+        }
+
+        .article-meta span {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .sentiment-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+
+        .sentiment-positive {
+            background: #c6f6d5;
+            color: #22543d;
+        }
+
+        .sentiment-negative {
+            background: #fed7d7;
+            color: #742a2a;
+        }
+
+        .sentiment-neutral {
+            background: #e2e8f0;
+            color: #2d3748;
+        }
+
+        .article-summary {
+            font-size: 14px;
+            color: #666;
+            line-height: 1.5;
+            margin-top: 10px;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            z-index: 1000;
+            overflow-y: auto;
+        }
+
+        .modal.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: white;
+            max-width: 800px;
+            width: 90%;
+            margin: 40px auto;
+            border-radius: 16px;
+            overflow: hidden;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .modal-header {
+            padding: 20px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        .modal-header h2 {
+            font-size: 22px;
+            flex: 1;
+            padding-right: 20px;
+        }
+
+        .close-modal {
+            background: none;
+            border: none;
+            font-size: 28px;
+            cursor: pointer;
+            color: #999;
+            line-height: 1;
+        }
+
+        .close-modal:hover {
+            color: #333;
+        }
+
+        .modal-body {
+            padding: 20px;
+        }
+
+        .modal-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #eee;
+            font-size: 13px;
+            color: #666;
+        }
+
+        .full-content {
+            line-height: 1.7;
+            font-size: 16px;
+            color: #333;
+            white-space: pre-wrap;
+        }
+
+        .full-content p {
+            margin-bottom: 1em;
+        }
+
+        .read-original {
+            display: inline-block;
+            margin-top: 20px;
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        .read-original:hover {
+            background: #5a67d8;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #888;
+        }
+
+        .error {
+            text-align: center;
+            padding: 40px;
+            color: #e53e3e;
+        }
+
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: #888;
+            font-size: 12px;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 15px;
+            }
+            .article-title {
+                font-size: 16px;
+            }
+            .modal-header h2 {
+                font-size: 18px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📰 News Reader</h1>
+        <p>Latest news with sentiment analysis</p>
+    </div>
+
+    <div class="container">
+        <div id="statusBar" class="status-bar"></div>
+
+        <div class="filters">
+            <select id="categoryFilter">
+                <option value="">All Categories</option>
+                <option value="Politics">Politics</option>
+                <option value="Economy">Economy</option>
+                <option value="Technology">Technology</option>
+                <option value="Crypto">Crypto</option>
+                <option value="Stock Market">Stock Market</option>
+                <option value="Business">Business</option>
+                <option value="Health">Health</option>
+                <option value="Sports">Sports</option>
+                <option value="Entertainment">Entertainment</option>
+                <option value="Energy">Energy</option>
+                <option value="General">General</option>
+            </select>
+            <select id="sentimentFilter">
+                <option value="">All Sentiments</option>
+                <option value="positive">😊 Positive</option>
+                <option value="neutral">😐 Neutral</option>
+                <option value="negative">😞 Negative</option>
+            </select>
+            <button id="applyFilters">Apply Filters</button>
+        </div>
+
+        <div class="stats">
+            <span id="articleCount">Loading articles...</span>
+            <button class="refresh-btn" id="refreshBtn">⟳ Refresh</button>
+        </div>
+
+        <div id="articleList" class="article-list">
+            <div class="loading">Loading news articles...</div>
+        </div>
+
+        <div class="footer">
+            News Sentiment Analysis | Data from local database
+        </div>
+    </div>
+
+    <div id="articleModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">Article Title</h2>
+                <button class="close-modal" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-meta" id="modalMeta"></div>
+                <div class="full-content" id="modalContent">
+                    Loading full article...
+                </div>
+                <a href="#" id="originalLink" class="read-original" target="_blank">🔗 Read Original Article</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Try to detect the correct API URL
+        function getApiBase() {
+            // If we're on the same host as the API (e.g., served from the same server)
+            if (window.location.port === '8000' || window.location.hostname === 'localhost') {
+                return `${window.location.protocol}//${window.location.hostname}:8000`;
+            }
+            // Default to localhost:8000
+            return 'http://localhost:8000';
+        }
+
+        const API_BASE = getApiBase();
+        let currentArticles = [];
+
+        function showStatus(message, isError = false) {
+            const statusBar = document.getElementById('statusBar');
+            if (statusBar) {
+                statusBar.textContent = message;
+                statusBar.style.background = isError ? '#f8d7da' : '#d4edda';
+                statusBar.style.color = isError ? '#721c24' : '#155724';
+                statusBar.style.borderColor = isError ? '#f5c6cb' : '#c3e6cb';
+                statusBar.classList.add('show');
+                setTimeout(() => {
+                    statusBar.classList.remove('show');
+                }, 5000);
+            }
+        }
+
+        function getSentimentBadge(sentiment, score) {
+            let emoji = sentiment === 'positive' ? '😊' : (sentiment === 'negative' ? '😞' : '😐');
+            let className = `sentiment-badge sentiment-${sentiment}`;
+            return `<span class="${className}">${emoji} ${sentiment} (${(score || 0).toFixed(2)})</span>`;
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr) return 'Unknown date';
+            try {
+                let date = new Date(dateStr);
+                return date.toLocaleDateString('en-US', { 
+                    year: 'numeric', 
+                    month: 'short', 
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+            } catch(e) {
+                return dateStr;
+            }
+        }
+
+        async function fetchArticles(category = '', sentiment = '') {
+            const container = document.getElementById('articleList');
+            if (container) {
+                container.innerHTML = '<div class="loading">📡 Fetching articles from API...</div>';
+            }
+
+            try {
+                let url = `${API_BASE}/api/articles/latest?limit=100`;
+                if (category) url += `&category=${encodeURIComponent(category)}`;
+                if (sentiment) url += `&sentiment=${encodeURIComponent(sentiment)}`;
+                
+                console.log('Fetching:', url);
+                
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                currentArticles = data.articles || [];
+                
+                const countEl = document.getElementById('articleCount');
+                if (countEl) {
+                    countEl.textContent = `📰 ${currentArticles.length} articles loaded`;
+                }
+                
+                if (currentArticles.length === 0) {
+                    showStatus('No articles found. Try running the crawler first: python main.py --mode crawl', false);
+                } else {
+                    showStatus(`✅ Loaded ${currentArticles.length} articles successfully!`, false);
+                }
+                
+                renderArticles(currentArticles);
+                return currentArticles;
+            } catch (error) {
+                console.error('Error fetching articles:', error);
+                
+                let errorMsg = `❌ Failed to load articles: ${error.message}`;
+                
+                if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+                    errorMsg = `❌ Cannot connect to API at ${API_BASE}. Make sure:
+1. The API server is running: python main.py --mode api
+2. The server is running on port 8000
+3. No firewall is blocking the connection`;
+                }
+                
+                showStatus(errorMsg, true);
+                
+                const container = document.getElementById('articleList');
+                if (container) {
+                    container.innerHTML = `
+                        <div class="error">
+                            <strong>⚠️ Connection Error</strong><br><br>
+                            ${errorMsg.replace(/\n/g, '<br>')}<br><br>
+                            <button onclick="location.reload()" style="padding: 8px 16px; margin-top: 10px; background: #667eea; color: white; border: none; border-radius: 6px; cursor: pointer;">
+                                🔄 Retry
+                            </button>
+                        </div>
+                    `;
+                }
+                return [];
+            }
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function renderArticles(articles) {
+            const container = document.getElementById('articleList');
+            if (!container) return;
+            
+            if (!articles || articles.length === 0) {
+                container.innerHTML = '<div class="loading">No articles found. Try different filters or run the crawler.</div>';
+                return;
+            }
+            
+            container.innerHTML = articles.map(article => `
+                <div class="article-card" onclick="openArticleModal(${article.id})">
+                    <div class="article-title">${escapeHtml(article.title || 'Untitled')}</div>
+                    <div class="article-meta">
+                        <span>📰 ${escapeHtml(article.source || 'Unknown')}</span>
+                        <span>📅 ${formatDate(article.published_date)}</span>
+                        <span>🏷️ ${escapeHtml(article.category || 'Uncategorized')}</span>
+                        <span>${getSentimentBadge(article.sentiment_label, article.sentiment_score)}</span>
+                    </div>
+                    <div class="article-summary">
+                        ${escapeHtml(article.summary || 'No summary available. Click to read full article.')}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function openArticleModal(articleId) {
+            const article = currentArticles.find(a => a.id === articleId);
+            if (!article) return;
+            
+            document.getElementById('modalTitle').textContent = article.title || 'Untitled';
+            document.getElementById('modalMeta').innerHTML = `
+                <span>📰 ${escapeHtml(article.source || 'Unknown')}</span>
+                <span>📅 ${formatDate(article.published_date)}</span>
+                <span>🏷️ ${escapeHtml(article.category || 'Uncategorized')}</span>
+                <span>${getSentimentBadge(article.sentiment_label, article.sentiment_score)}</span>
+            `;
+            
+            const originalLink = document.getElementById('originalLink');
+            if (article.url) {
+                originalLink.href = article.url;
+                originalLink.style.display = 'inline-block';
+            } else {
+                originalLink.style.display = 'none';
+            }
+            
+            const contentDiv = document.getElementById('modalContent');
+            if (article.summary && article.summary.length > 50) {
+                contentDiv.innerHTML = `<p>${escapeHtml(article.summary)}</p>`;
+            } else {
+                contentDiv.innerHTML = `
+                    <p>${escapeHtml(article.summary || 'No summary available for this article.')}</p>
+                    <p style="margin-top: 15px; color: #888;">💡 Click the button below to read the full article on the original website.</p>
+                `;
+            }
+            
+            document.getElementById('articleModal').classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('articleModal').classList.remove('active');
+        }
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeModal();
+            }
+        });
+
+        document.getElementById('articleModal')?.addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeModal();
+            }
+        });
+
+        async function init() {
+            console.log('News Reader starting...');
+            console.log('API Base URL:', API_BASE);
+            
+            // Test API connection first
+            try {
+                const testResponse = await fetch(`${API_BASE}/api/health`);
+                if (testResponse.ok) {
+                    console.log('API connection successful');
+                    showStatus('✅ Connected to API server', false);
+                } else {
+                    console.warn('API health check failed:', testResponse.status);
+                }
+            } catch (error) {
+                console.warn('API health check failed:', error);
+                showStatus(`⚠️ API server at ${API_BASE} is not responding. Make sure it's running.`, true);
+            }
+            
+            await fetchArticles();
+            
+            document.getElementById('applyFilters')?.addEventListener('click', async () => {
+                const category = document.getElementById('categoryFilter').value;
+                const sentiment = document.getElementById('sentimentFilter').value;
+                await fetchArticles(category, sentiment);
+            });
+            
+            document.getElementById('refreshBtn')?.addEventListener('click', async () => {
+                const category = document.getElementById('categoryFilter').value;
+                const sentiment = document.getElementById('sentimentFilter').value;
+                await fetchArticles(category, sentiment);
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>

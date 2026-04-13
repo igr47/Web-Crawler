@@ -6,6 +6,8 @@ from pydantic import BaseModel, HttpUrl
 from typing import Optional, List
 from datetime import datetime, timedelta
 import json
+from fastapi.responses import HTMLResponse
+import os
 
 from sqlalchemy import True_
 
@@ -445,6 +447,28 @@ async def process_webhook_article(payload: WebhookPayload):
     
     logger.info(f"Processed webhook article: {payload.title}")
 
+@app.get("/news-reader", response_class=HTMLResponse)
+async def news_reader():
+    # Get the directory where api/app.py is located, then go up one level
+    api_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(api_dir)  # Go up one level from 'api' folder
+    html_path = os.path.join(project_root, "news_reader.html")
+    
+    if os.path.exists(html_path):
+        with open(html_path, "r", encoding="utf-8") as f:
+            html_content = f.read()
+        return HTMLResponse(content=html_content)
+    else:
+        return HTMLResponse(content=f"""
+        <html>
+            <body>
+                <h1>News Reader Not Found</h1>
+                <p>The file 'news_reader.html' was not found at: {html_path}</p>
+                <p>Project root: {project_root}</p>
+                <p>API directory: {api_dir}</p>
+            </body>
+        </html>
+        """, status_code=404)
 
 @app.get("/api/health")
 async def health_check():

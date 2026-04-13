@@ -52,11 +52,11 @@ class Config:
         "NHK World": "https://www3.nhk.or.jp/nhkworld/upd/rss/en/",
         "Global Voices": "https://globalvoices.org/feed/",
         "ABC Australia": "https://www.abc.net.au/news/feed/51120/rss.xml",
-        "CBC News": "https://www.cbc.ca/rss/",
+        #"CBC News": "https://www.cbc.ca/rss/",
         "PBS News": "https://www.pbs.org/newshour/feeds/rss/headlines",
         
         # Technology & Science
-        "The Verge": "https://www.theverge.com/rss/index.xml",
+        #"The Verge": "https://www.theverge.com/rss/index.xml",
         "Ars Technica": "https://arstechnica.com/feed/",
         "Engadget": "https://www.engadget.com/rss.xml",
         "NASA": "https://www.nasa.gov/rss/dyn/breaking_news.rss",
@@ -87,6 +87,12 @@ class Config:
         "VICE News": "https://www.vice.com/en/rss",
         "Mother Jones": "https://www.motherjones.com/feed/",
         "ProPublica": "https://www.propublica.org/feeds/propublica/main",
+
+        "Standard (Main Headlines)": "https://www.standardmedia.co.ke/rss/headlines.php",
+        "Standard (Kenya News)": "https://www.standardmedia.co.ke/rss/kenya.php",
+        "Standard (World News)": "https://www.standardmedia.co.ke/rss/world.php",
+        "Standard (Politics)": "https://www.standardmedia.co.ke/rss/politics.php",
+        "Standard (Business)": "https://www.standardmedia.co.ke/rss/business.php",
 
     }
 

@@ -1,13 +1,10 @@
 from celery import Celery
-from celery.app import task
-from celery.schedules import crontab, schedule
-from datetime import datetime
+from celery.schedules import crontab
+from datetime import datetime, timedelta
 import logging
 import json
 import sys
 import os
-
-from requests import get, options
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -36,17 +33,16 @@ celery_app.conf.update(
         # Fast crawl for major news site (every five minutes)
         'crawl-major-sources': {
             'task': 'crawler.crawl_major_sources',
-            'schedule': 300.0, # 5 minutes
+            'schedule': 300.0,  # 5 minutes
             'options': {'queue': 'fast_crawl'}
         },
         # Full crawl for all sources (every one hour)
-        'crawl_all_sources': {
-            'task': 'crawler.crawl_all_sources',
-            'schedule': 3600.0, # 1 hour
+        'crawl-all-sources': {  # Changed key name to avoid confusion
+            'task': 'crawler.crawl_all_sources',  # This task will be defined
+            'schedule': 3600.0,  # 1 hour
             'options': {'queue': 'full_crawl'}
         },
-        #Update sentiment aggregations ()
-                # Update sentiment aggregations (every 15 minutes)
+        # Update sentiment aggregations (every 15 minutes)
         'update-sentiment-aggregations': {
             'task': 'crawler.update_sentiment_aggregations',
             'schedule': 900.0,  # 15 minutes
@@ -73,9 +69,99 @@ celery_app.conf.update(
     },
 )
 
+@celery_app.task(name='crawler.crawl_all_sources')
+def crawl_all_sources():
+    """Task to crawl ALL news sources (full crawl)"""
+    from database.connections import get_db_session
+    from crawlers.news_crawler import NewsCrawler
+    from crawlers.sentiment_analyzer import SentimentAnalyzer
+    from processors.category_classifier import CategoryClassifier
+    from database.models import NewsArticle, CrawlHistory
+    from config import config
+    
+    db = get_db_session()
+    sentiment_analyzer = SentimentAnalyzer()
+    classifier = CategoryClassifier()
+    crawler = NewsCrawler(db, sentiment_analyzer, config)
+    
+    # Track crawl
+    crawl_record = CrawlHistory(
+        source="all_sources_full",
+        start_time=datetime.utcnow(),
+        status="running"
+    )
+    db.add(crawl_record)
+    db.commit()
+    
+    try:
+        # Crawl ALL RSS feeds (no filtering)
+        articles = crawler.crawl_rss_feeds()
+        
+        # Process each article
+        new_count = 0
+        for article_data in articles:
+            # Check if article already exists
+            existing = db.query(NewsArticle).filter(
+                NewsArticle.url == article_data['url']
+            ).first()
+            
+            if existing:
+                continue
+            
+            # Classify category
+            category, keywords = classifier.classify_article(
+                article_data['title'],
+                article_data['content']
+            )
+            
+            # Create article record
+            article = NewsArticle(
+                url=article_data['url'],
+                title=article_data['title'],
+                content=article_data['content'],
+                summary=article_data['summary'],
+                source=article_data['source'],
+                published_date=article_data['published_date'],
+                category=category,
+                sentiment_score=article_data['sentiment_score'],
+                sentiment_label=article_data['sentiment_label'],
+                confidence_score=article_data['confidence_score'],
+                keywords=json.dumps(article_data['keywords']),
+                image_url=article_data.get('image_url'),
+                processed=True
+            )
+            
+            db.add(article)
+            new_count += 1
+        
+        db.commit()
+        
+        # Update crawl record
+        crawl_record.end_time = datetime.utcnow()
+        crawl_record.articles_found = len(articles)
+        crawl_record.articles_new = new_count
+        crawl_record.status = "completed"
+        db.commit()
+        
+        logger.info(f"Full crawl completed: {new_count} new articles out of {len(articles)} total")
+        
+        return {
+            "status": "success",
+            "articles_found": len(articles),
+            "new_articles": new_count,
+            "crawl_type": "full"
+        }
+        
+    except Exception as e:
+        logger.error(f"Full crawl failed: {e}")
+        crawl_record.status = "failed"
+        crawl_record.error_message = str(e)
+        db.commit()
+        raise
+
 @celery_app.task(name='crawler.crawl_major_sources')
 def crawl_major_sources():
-    """Task to crawl all news sources"""
+    """Task to crawl only major news sources (fast crawl)"""
     from database.connections import get_db_session
     from crawlers.news_crawler import NewsCrawler
     from crawlers.sentiment_analyzer import SentimentAnalyzer
@@ -96,11 +182,17 @@ def crawl_major_sources():
         "TechCrunch": config.RSS_FEEDS.get("TechCrunch"),
         "The Guardian": config.RSS_FEEDS.get("The Guardian"),
         "Sky News": config.RSS_FEEDS.get("Sky News"),
-        "CBC News": config.RSS_FEEDS.get("CBC News"),
-        "The Verge": config.RSS_FEEDS.get("The Verge"),
+        #"CBC News": config.RSS_FEEDS.get("CBC News"),
         "Yahoo Finance": config.RSS_FEEDS.get("Yahoo Finance"),
+        "CoinDesk": config.RSS_FEEDS.get("CoinDesk"),
+        "CoinTelegraph": config.RSS_FEEDS.get("CoinTelegraph"),
         "MarketWatch": config.RSS_FEEDS.get("MarketWatch"),
-        "USA TODAY": config.RSS_FEEDS.get("USA TODAY")
+        "USA TODAY": config.RSS_FEEDS.get("USA TODAY"),
+        #"The Verge": config.RSS_FEEDS.get("The Verge"),
+        "Standard (Main Headlines)": config.RSS_FEEDS.get("Standard (Main Headlines)"),
+        "Standard (Kenya News)": config.RSS_FEEDS.get("Standard (Kenya News)"),
+        "Standard (Politics)": config.RSS_FEEDS.get("Standard (Politics)"),
+        "Standard (Business)": config.RSS_FEEDS.get("Standard (Business)"),
     }
 
     # Temporarily override RSS feeds
@@ -130,7 +222,6 @@ def crawl_major_sources():
 
             if existing: 
                 continue
-
 
             # Classify category
             category, keywords = classifier.classify_article(
@@ -176,7 +267,6 @@ def crawl_major_sources():
             "status": "success",
             "articles_found": len(articles),
             "new_articles": new_count
-            #"crawl_type": "fast"
         }
         
     except Exception as e:
@@ -190,7 +280,7 @@ def crawl_major_sources():
 @celery_app.task(name='crawler.update_sentiment_aggregations')
 def update_sentiment_aggregations():
     """Update category sentiment aggregations"""
-    from database.connection import get_db_session
+    from database.connections import get_db_session
     from processors.aggregator import SentimentAggregator
     from database.models import CategoryAggregation
     
