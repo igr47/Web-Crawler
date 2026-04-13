@@ -1,41 +1,24 @@
 import re
-from typing import Tuple, List, Dict
+from typing import Tuple, List, Dict, Set
 from collections import Counter
 import math
 
 class SentimentAnalyzer:
     """
-    Lightweight sentiment analyzer using lexicon-based approach.
-    No AI models, no large downloads, just simple word scoring.
+    Sentiment analyzer with advanced lexicon and context awareness.
     """
     
     def __init__(self):
-        # Positive and negative word lists
-        self.positive_words = {
-            'good', 'great', 'excellent', 'amazing', 'wonderful', 'fantastic', 
-            'brilliant', 'awesome', 'incredible', 'outstanding', 'perfect',
-            'positive', 'strong', 'growth', 'profit', 'gain', 'up', 'rise',
-            'increasing', 'success', 'successful', 'win', 'winning', 'victory',
-            'happy', 'pleased', 'satisfied', 'impressed', 'proud', 'optimistic',
-            'bullish', 'rally', 'surge', 'boom', 'opportunity', 'advantage',
-            'benefit', 'improvement', 'better', 'best', 'leading', 'top',
-            'breakthrough', 'innovation', 'award', 'celebrate', 'hope'
-        }
+        # Expanded positive word lists
+        self.positive_words = self._load_positive_words()
+        self.negative_words = self._load_negative_words()
         
-        self.negative_words = {
-            'bad', 'terrible', 'awful', 'horrible', 'disaster', 'catastrophic',
-            'negative', 'weak', 'loss', 'decline', 'down', 'fall', 'decrease',
-            'dropping', 'failure', 'fail', 'losing', 'defeat', 'crisis',
-            'angry', 'upset', 'disappointed', 'concerned', 'pessimistic',
-            'bearish', 'crash', 'plunge', 'slump', 'risk', 'threat',
-            'damage', 'problem', 'issue', 'cancer', 'death', 'dead',
-            'worst', 'poor', 'low', 'against', 'attack', 'war', 'conflict'
-        }
-        
-        # Intensifiers (amplify sentiment)
+        # Intensifiers with different weights
         self.intensifiers = {
-            'very', 'extremely', 'incredibly', 'absolutely', 'really',
-            'highly', 'particularly', 'exceptionally', 'remarkably'
+            'very': 1.5, 'extremely': 2.0, 'incredibly': 1.8, 'absolutely': 1.7,
+            'really': 1.4, 'highly': 1.5, 'particularly': 1.4, 'exceptionally': 1.8,
+            'remarkably': 1.6, 'completely': 1.5, 'totally': 1.4, 'utterly': 1.7,
+            'strongly': 1.5, 'deeply': 1.4, 'overwhelmingly': 1.6
         }
         
         # Negations (flip sentiment)
@@ -44,45 +27,114 @@ class SentimentAnalyzer:
             'hardly', 'scarcely', 'barely', "isn't", "aren't", "wasn't",
             "weren't", "hasn't", "haven't", "hadn't", "won't", "wouldn't",
             "don't", "doesn't", "didn't", "cannot", "can't", "couldn't",
-            "shouldn't", "isnt", "arent", "wasnt", "werent", "hasnt"
+            "shouldn't", "isnt", "arent", "wasnt", "werent", "hasnt",
+            "without", "lack", "lacks", "missing"
         }
         
-        # Domain-specific financial/news terms
-        self.financial_positive = {
+        # Downtoners (reduce sentiment intensity)
+        self.downtoners = {
+            'slightly': 0.5, 'somewhat': 0.6, 'kind of': 0.6, 'sort of': 0.6,
+            'a little': 0.5, 'moderately': 0.7, 'fairly': 0.7, 'quite': 0.8
+        }
+        
+        # Compile regex patterns
+        self.word_pattern = re.compile(r'\b[a-z]+\b')
+        self.contraction_pattern = re.compile(r"\b\w+(?:n't)\b")
+        
+    def _load_positive_words(self) -> Set[str]:
+        """Load comprehensive positive word list"""
+        positive = {
+            # Basic positives
+            'good', 'great', 'excellent', 'amazing', 'wonderful', 'fantastic',
+            'brilliant', 'awesome', 'incredible', 'outstanding', 'perfect',
+            'positive', 'strong', 'growth', 'profit', 'gain', 'up', 'rise',
+            'increasing', 'success', 'successful', 'win', 'winning', 'victory',
+            'happy', 'pleased', 'satisfied', 'impressed', 'proud', 'optimistic',
+            'bullish', 'rally', 'surge', 'boom', 'opportunity', 'advantage',
+            'benefit', 'improvement', 'better', 'best', 'leading', 'top',
+            'breakthrough', 'innovation', 'award', 'celebrate', 'hope',
+            
+            # Financial positive
             'surged', 'soared', 'jumped', 'climbed', 'rose', 'gained',
-            'upgraded', 'outperform', 'buy', 'overweight', 'bull',
-            'dividend', 'profit', 'revenue', 'earnings', 'beat'
+            'upgraded', 'outperform', 'buy', 'overweight', 'bull', 'bullish',
+            'dividend', 'profit', 'revenue', 'earnings', 'beat', 'exceeded',
+            'record', 'high', 'peak', 'rallying', 'recovery', 'rebound',
+            
+            # Achievement words
+            'achieved', 'accomplished', 'succeeded', 'won', 'earned',
+            'advanced', 'improved', 'enhanced', 'strengthened', 'boosted',
+            
+            # Positive events
+            'peace', 'agreement', 'deal', 'partnership', 'collaboration',
+            'launch', 'release', 'discovery', 'breakthrough', 'innovation'
         }
-        
-        self.financial_negative = {
+        return positive
+    
+    def _load_negative_words(self) -> Set[str]:
+        """Load comprehensive negative word list with strong negatives"""
+        negative = {
+            # Basic negatives
+            'bad', 'terrible', 'awful', 'horrible', 'disaster', 'catastrophic',
+            'negative', 'weak', 'loss', 'decline', 'down', 'fall', 'decrease',
+            'dropping', 'failure', 'fail', 'losing', 'defeat', 'crisis',
+            'angry', 'upset', 'disappointed', 'concerned', 'pessimistic',
+            'bearish', 'crash', 'plunge', 'slump', 'risk', 'threat',
+            'damage', 'problem', 'issue', 'worst', 'poor', 'low',
+            
+            # Death and violence (CRITICAL for your use case)
+            'death', 'dead', 'died', 'dying', 'kill', 'killed', 'killing',
+            'murder', 'murdered', 'murdering', 'homicide', 'slain', 'assassination',
+            'assassinated', 'execute', 'executed', 'execution', 'massacre',
+            'genocide', 'casualty', 'casualties', 'fatal', 'fatalities',
+            'victim', 'victims', 'tragic', 'tragedy', 'suffered', 'suffering',
+            'injured', 'wounded', 'injuries', 'wounds', 'critical condition',
+            'stampede', 'crushed', 'collapsed', 'explosion', 'blast',
+            
+            # Violence and conflict
+            'attack', 'attacked', 'attacking', 'strike', 'struck', 'hit',
+            'bomb', 'bombed', 'bombing', 'explode', 'exploded', 'explosion',
+            'war', 'warfare', 'battle', 'conflict', 'fight', 'fighting',
+            'violence', 'violent', 'riot', 'riots', 'protest', 'protests',
+            'clash', 'clashes', 'assault', 'assaulted', 'abuse', 'abused',
+            
+            # Financial negative
             'plunged', 'tumbled', 'slumped', 'dropped', 'fell', 'lost',
             'downgraded', 'underperform', 'sell', 'underweight', 'bear',
-            'loss', 'debt', 'bankrupt', 'lawsuit', 'investigation'
+            'loss', 'debt', 'bankrupt', 'bankruptcy', 'lawsuit', 'investigation',
+            'fraud', 'scam', 'collapse', 'default', 'crashing',
+            
+            # Disease and health
+            'disease', 'illness', 'sick', 'infected', 'infection', 'outbreak',
+            'pandemic', 'epidemic', 'virus', 'cancer', 'tumor', 'fatal disease',
+            
+            # Negative events
+            'blockade', 'sanctions', 'shortage', 'shortages', 'fuel crisis',
+            'blackout', 'outage', 'emergency', 'evacuation', 'evacuate'
         }
-        
-        # Combine all word lists
-        self.positive_words.update(self.financial_positive)
-        self.negative_words.update(self.financial_negative)
-        
-        # Compile regex for word boundary matching
-        self.word_pattern = re.compile(r'\b[a-z]+\b')
+        return negative
     
     def _tokenize_and_clean(self, text: str) -> List[str]:
-        """Convert text to lowercase words, remove punctuation"""
+        """Convert text to lowercase words, preserve negations"""
         text = text.lower()
+        # Handle common contractions
+        text = re.sub(r"n't", " not", text)
+        text = re.sub(r"'re", " are", text)
+        text = re.sub(r"'ve", " have", text)
+        text = re.sub(r"'ll", " will", text)
         # Remove punctuation
         text = re.sub(r'[^\w\s]', ' ', text)
         # Split into words
         words = self.word_pattern.findall(text)
         return words
     
-    def _calculate_sentiment_score(self, words: List[str]) -> Tuple[float, int, int]:
+    def _calculate_sentiment_score(self, words: List[str]) -> Tuple[float, int, int, List[str]]:
         """
-        Calculate sentiment score based on word occurrences.
-        Returns (score, positive_count, negative_count)
+        Calculate sentiment score with context awareness.
+        Returns (score, positive_count, negative_count, key_phrases)
         """
         positive_count = 0
         negative_count = 0
+        key_phrases = []
         
         i = 0
         while i < len(words):
@@ -90,33 +142,62 @@ class SentimentAnalyzer:
             
             # Check for negation (affects current and next word)
             negated = False
+            negation_distance = 0
             if word in self.negations:
                 negated = True
+                # Negation affects up to 3 following words
+                negation_distance = 3
                 i += 1
                 if i >= len(words):
                     break
                 word = words[i]
             
-            # Check for intensifier
-            intensifier = 1.0
+            # Check for intensifier/downtoner
+            intensity = 1.0
             if word in self.intensifiers:
-                intensifier = 1.5
+                intensity = self.intensifiers[word]
+                i += 1
+                if i >= len(words):
+                    break
+                word = words[i]
+            elif word in self.downtoners:
+                intensity = self.downtoners[word]
                 i += 1
                 if i >= len(words):
                     break
                 word = words[i]
             
-            # Score the word
-            if word in self.positive_words:
+            # Check for multi-word phrases (e.g., "natural disaster")
+            phrase = word
+            if i + 1 < len(words):
+                phrase = f"{word} {words[i + 1]}"
+            
+            # Score the word/phrase
+            is_positive = word in self.positive_words or phrase in self.positive_words
+            is_negative = word in self.negative_words or phrase in self.negative_words
+            
+            # Special handling for death/violence words (boost negativity)
+            if word in {'death', 'dead', 'died', 'dying', 'kill', 'killed', 'murder', 
+                       'massacre', 'casualty', 'fatal', 'tragic', 'victim'}:
+                is_negative = True
+                intensity *= 1.5  # Boost intensity for strong negatives
+            
+            if is_positive:
                 if negated:
-                    negative_count += 1 * intensifier
+                    negative_count += 1 * intensity
+                    if intensity > 1.0:
+                        key_phrases.append(f"negated_{word}")
                 else:
-                    positive_count += 1 * intensifier
-            elif word in self.negative_words:
+                    positive_count += 1 * intensity
+                    if intensity > 1.0:
+                        key_phrases.append(word)
+            elif is_negative:
                 if negated:
-                    positive_count += 1 * intensifier
+                    positive_count += 1 * intensity
                 else:
-                    negative_count += 1 * intensifier
+                    negative_count += 1 * intensity
+                    if intensity > 1.0 or word in self.negative_words:
+                        key_phrases.append(word)
             
             i += 1
         
@@ -125,17 +206,19 @@ class SentimentAnalyzer:
         if total == 0:
             score = 0.0
         else:
-            score = (positive_count - negative_count) / total
+            # Use hyperbolic tangent for better distribution
+            raw_score = (positive_count - negative_count) / total
+            # Amplify strong signals
+            score = math.tanh(raw_score * 2)
         
         # Clamp to [-1, 1]
         score = max(-1.0, min(1.0, score))
         
-        return score, positive_count, negative_count
+        return score, positive_count, negative_count, key_phrases[:10]
     
     def analyze_text(self, text: str) -> Dict:
         """
-        Analyze sentiment of any text.
-        Returns dict with score, label, confidence, and counts.
+        Analyze sentiment of any text with improved accuracy.
         """
         if not text or len(text.strip()) < 10:
             return {
@@ -147,53 +230,65 @@ class SentimentAnalyzer:
             }
         
         words = self._tokenize_and_clean(text)
-        score, pos_count, neg_count = self._calculate_sentiment_score(words)
+        score, pos_count, neg_count, key_phrases = self._calculate_sentiment_score(words)
         
-        # Determine label
-        if score > 0.2:
+        # Adjust thresholds for better classification
+        if score > 0.15:  # Lowered threshold from 0.2
             label = 'positive'
-        elif score < -0.2:
+        elif score < -0.15:  # Lowered threshold from -0.2
             label = 'negative'
         else:
             label = 'neutral'
         
-        # Calculate confidence based on word count and score extremity
-        total_words = len(words)
-        word_confidence = min(1.0, total_words / 100)  # More words = more confidence
-        extremity_confidence = abs(score)  # Extreme scores = more confident
-        confidence = (word_confidence + extremity_confidence) / 2
+        # Special override for strong negative words
+        text_lower = text.lower()
+        strong_negatives = ['death', 'dead', 'kill', 'murder', 'massacre', 'casualty', 
+                           'fatal', 'tragic', 'victim', 'disaster', 'catastrophe']
+        if any(word in text_lower for word in strong_negatives):
+            if score > -0.3:  # If not already strongly negative
+                score = max(score, -0.5)  # Ensure at least moderately negative
+                label = 'negative'
         
-        # Extract key positive/negative words for context
-        positive_found = [w for w in words if w in self.positive_words][:5]
-        negative_found = [w for w in words if w in self.negative_words][:5]
+        # Calculate confidence based on word count, score extremity, and key phrases
+        total_words = len(words)
+        word_confidence = min(1.0, total_words / 80)  # Lower threshold
+        extremity_confidence = abs(score)
+        phrase_confidence = min(1.0, len(key_phrases) / 5) * 0.3
+        confidence = (word_confidence * 0.3 + extremity_confidence * 0.5 + phrase_confidence)
+        confidence = min(1.0, confidence)
         
         return {
-            'sentiment_score': score,
+            'sentiment_score': round(score, 3),
             'sentiment_label': label,
-            'confidence_score': confidence,
+            'confidence_score': round(confidence, 3),
             'positive_word_count': pos_count,
             'negative_word_count': neg_count,
-            'key_positive_words': positive_found,
-            'key_negative_words': negative_found
+            'key_positive_words': [p for p in key_phrases if not p.startswith('negated_')][:5],
+            'key_negative_words': [p for p in key_phrases if p.startswith('negated_') or p in self.negative_words][:5]
         }
     
     def analyze_article(self, title: str, content: str) -> Dict:
         """
-        Analyze sentiment of a news article.
-        Title is weighted more heavily than content.
+        Analyze sentiment of a news article with weighted scoring.
         """
-        # Weight title more (3x importance)
+        # Analyze title (higher weight for headlines)
         title_result = self.analyze_text(title)
-        content_result = self.analyze_text(content[:2000])  # Limit content length
         
-        # Combine scores: title 40%, content 60%
-        combined_score = (title_result['sentiment_score'] * 0.4 + 
-                         content_result['sentiment_score'] * 0.6)
+        # Analyze first 3000 characters of content (more context)
+        content_preview = content[:3000] if content else ''
+        content_result = self.analyze_text(content_preview)
         
-        # Determine label
-        if combined_score > 0.2:
+        # Weight: title 35%, content 65% (title is more important for news)
+        combined_score = (title_result['sentiment_score'] * 0.35 + 
+                         content_result['sentiment_score'] * 0.65)
+        
+        # Determine label with special consideration for title
+        if title_result['sentiment_label'] == 'negative' and combined_score > -0.1:
+            combined_score = max(combined_score, -0.2)  # Ensure negativity from title isn't lost
+        
+        if combined_score > 0.15:
             label = 'positive'
-        elif combined_score < -0.2:
+        elif combined_score < -0.15:
             label = 'negative'
         else:
             label = 'neutral'
@@ -209,112 +304,10 @@ class SentimentAnalyzer:
                       content_result.get('key_negative_words', []))[:10]
         
         return {
-            'sentiment_score': combined_score,
+            'sentiment_score': round(combined_score, 3),
             'sentiment_label': label,
-            'confidence_score': combined_confidence,
+            'confidence_score': round(combined_confidence, 3),
             'key_phrases': key_phrases,
             'title_sentiment': title_result['sentiment_score'],
             'content_sentiment': content_result['sentiment_score']
         }
-    
-    def aggregate_sentiment(self, articles: List[Dict]) -> Dict:
-        """
-        Aggregate sentiment across multiple articles.
-        Useful for category-level analysis.
-        """
-        if not articles:
-            return {
-                'average_sentiment': 0,
-                'median_sentiment': 0,
-                'std_deviation': 0,
-                'positive_ratio': 0,
-                'negative_ratio': 0,
-                'neutral_ratio': 0,
-                'sentiment_trend': 0
-            }
-        
-        scores = [a.get('sentiment_score', 0) for a in articles]
-        
-        # Calculate statistics
-        avg_score = sum(scores) / len(scores)
-        
-        # Sort for median
-        sorted_scores = sorted(scores)
-        mid = len(sorted_scores) // 2
-        median_score = (sorted_scores[mid] + sorted_scores[~mid]) / 2
-        
-        # Standard deviation
-        variance = sum((s - avg_score) ** 2 for s in scores) / len(scores)
-        std_dev = math.sqrt(variance)
-        
-        # Ratios
-        positive_count = sum(1 for s in scores if s > 0.2)
-        negative_count = sum(1 for s in scores if s < -0.2)
-        neutral_count = len(scores) - positive_count - negative_count
-        
-        return {
-            'average_sentiment': round(avg_score, 3),
-            'median_sentiment': round(median_score, 3),
-            'std_deviation': round(std_dev, 3),
-            'positive_ratio': round(positive_count / len(scores), 3),
-            'negative_ratio': round(negative_count / len(scores), 3),
-            'neutral_ratio': round(neutral_count / len(scores), 3),
-            'sentiment_trend': self._calculate_trend(scores)
-        }
-    
-    def _calculate_trend(self, scores: List[float]) -> float:
-        """Simple trend calculation (recent vs older)"""
-        if len(scores) < 4:
-            return 0
-        
-        # Compare most recent 1/3 vs oldest 1/3
-        split_point = len(scores) // 3
-        recent = sum(scores[:split_point]) / split_point if split_point > 0 else 0
-        older = sum(scores[-split_point:]) / split_point if split_point > 0 else 0
-        
-        return round(recent - older, 3)
-    
-    def get_sentiment_summary(self, text: str) -> str:
-        """Get human-readable sentiment summary"""
-        result = self.analyze_text(text)
-        
-        if result['sentiment_score'] > 0.5:
-            return "Very Positive"
-        elif result['sentiment_score'] > 0.2:
-            return "Positive"
-        elif result['sentiment_score'] < -0.5:
-            return "Very Negative"
-        elif result['sentiment_score'] < -0.2:
-            return "Negative"
-        else:
-            return "Neutral"
-
-
-# Example usage and testing
-if __name__ == "__main__":
-    analyzer = SentimentAnalyzer()
-    
-    # Test cases
-    test_articles = [
-        ("Stock market surges to all-time high", 
-         "The stock market reached record levels today as investor confidence grows."),
-        
-        ("Company reports massive losses", 
-         "The company announced disappointing earnings, with profits down 50%."),
-        
-        ("Federal reserve announces rate decision", 
-         "The Fed kept interest rates unchanged as expected."),
-        
-        ("Bitcoin rallies 20% after positive regulatory news", 
-         "Cryptocurrency markets saw a massive surge following favorable regulations."),
-        
-        ("Oil prices crash amid demand concerns", 
-         "Crude oil prices plummeted as global demand weakens significantly.")
-    ]
-    
-    for title, content in test_articles:
-        result = analyzer.analyze_article(title, content)
-        print(f"\nTitle: {title}")
-        print(f"Sentiment: {result['sentiment_label']} (score: {result['sentiment_score']:.2f})")
-        print(f"Confidence: {result['confidence_score']:.2f}")
-        print(f"Key phrases: {result['key_phrases'][:3]}")

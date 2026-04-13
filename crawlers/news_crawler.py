@@ -9,6 +9,8 @@ from typing import List, Dict
 from urllib.parse import urlparse
 import logging
 
+from processors.sentiment_refiner import SentimentRefiner
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -65,6 +67,13 @@ class NewsCrawler:
             sentiment = self.sentiment_analyzer.analyze_article(
                 title, 
                 article_data['content']
+            )
+
+            refiner = SentimentRefiner()
+            sentiment = refiner.refine_sentiment(
+                title,
+                article_data['content'],
+                sentiment
             )
             
             return {

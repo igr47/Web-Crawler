@@ -1,4 +1,3 @@
-# database/models.py
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Text, Boolean, Index
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
@@ -74,7 +73,7 @@ class CategoryAggregation(Base):
     neutral_count = Column(Integer)
     
     # Trending
-    sentiment_trend = Column(Float)  # Change from previous period
+    sentiment_trend = Column(Float)  
     volume_trend = Column(Float)
     
     # Top articles
@@ -108,8 +107,8 @@ def init_db(database_url):
     if database_url.startswith('sqlite'):
         engine = create_engine(
             database_url,
-            connect_args={"check_same_thread": False},  # Allow multi-threading
-            pool_size=10,  # SQLite doesn't need pooling, but it's fine
+            connect_args={"check_same_thread": False},
+            pool_size=10,  
             max_overflow=20
         )
     else:

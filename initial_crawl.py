@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Run initial full crawl to populate database with all sources"""
+"""Runing initial full crawl to populate database with all sources"""
 
 import sys
 import os

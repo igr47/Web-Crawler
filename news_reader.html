@@ -401,9 +401,7 @@
     </div>
 
     <script>
-        // Try to detect the correct API URL
         function getApiBase() {
-            // If we're on the same host as the API (e.g., served from the same server)
             if (window.location.port === '8000' || window.location.hostname === 'localhost') {
                 return `${window.location.protocol}//${window.location.hostname}:8000`;
             }
