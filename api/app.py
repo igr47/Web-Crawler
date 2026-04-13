@@ -1,11 +1,13 @@
 from itertools import count
 from operator import and_
-from fastapi import FastAPI, Query, BackgroundTasks
+from fastapi import FastAPI, Query, BackgroundTasks, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, HttpUrl
 from typing import Optional, List
 from datetime import datetime, timedelta
 import json
+
+from sqlalchemy import True_
 
 app = FastAPI(title="News Sentiment API")
 
@@ -20,8 +22,10 @@ app.add_middleware(
 
 # Database setup
 #from database.connection import get_db
+from database.connections import get_db_session
 from database.models import NewsArticle, CategoryAggregation
 from processors.aggregator import SentimentAggregator
+from api.websocket import manager
 
 class SentimentResponse(BaseModel):
     category: str
@@ -40,6 +44,22 @@ class ArticleResponse(BaseModel):
     sentiment_score: float
     sentiment_label: str
     url: str
+
+class WebhookPayload(BaseModel):
+    url: HttpUrl
+    title: str
+    content: Optional[str] = None
+    source: str
+    published_at: datetime
+    category: Optional[str] = None
+
+def get_db():
+    """Dependency for FastAPI routes"""
+    db = get_db_session()
+    try:
+        yield db
+    finally:
+        pass  # Keep session alive for now
 
 @app.get("/")
 async def root():
@@ -332,6 +352,99 @@ async def export_articles_csv(
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename=news_export_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.csv"}
     )
+
+@app.websocket("/ws/{client_id}")
+async def websocket_endpoint(websocket: WebSocket, client_id: str):
+    await manager.connect(websocket)
+    try:
+        while True:
+            # Receive subscription requests
+            data = await websocket.receive_text()
+            try:
+                message = json.loads(data)
+                if message.get('action') == 'subscribe':
+                    category = message.get('category')
+                    if category:
+                        await manager.subscribe(websocket, category)
+                        await websocket.send_json({
+                            "status": "subscribed",
+                            "category": category
+                        })
+            except:
+                pass
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+
+
+@app.post("/webhook/news")
+async def receive_webhook(payload: WebhookPayload, background_tasks: BackgroundTasks):
+    """Receive real-time news updates via webhook"""
+    
+    # Process in background
+    background_tasks.add_task(process_webhook_article, payload)
+    
+    return {
+        "status": "received",
+        "message": "Article received and queued for processing",
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
+async def process_webhook_article(payload: WebhookPayload):
+    """Process webhook article asynchronously"""
+    from database.connections import get_db_session
+    from database.models import NewsArticle
+    from crawlers.sentiment_analyzer import SentimentAnalyzer
+    from processors.category_classifier import CategoryClassifier
+    from api.websocket import manager
+    
+    db = get_db_session()
+    sentiment_analyzer = SentimentAnalyzer()
+    classifier = CategoryClassifier()
+    
+    # Check if article exists
+    existing = db.query(NewsArticle).filter(
+        NewsArticle.url == str(payload.url)
+    ).first()
+    
+    if existing:
+        return
+    
+    # Analyze sentiment
+    sentiment = sentiment_analyzer.analyze_article(
+        payload.title,
+        payload.content or payload.title
+    )
+    
+    # Classify category
+    category, keywords = classifier.classify_article(
+        payload.title,
+        payload.content or payload.title
+    )
+    
+    # Create article
+    article = NewsArticle(
+        url=str(payload.url),
+        title=payload.title,
+        content=payload.content or '',
+        summary=payload.content[:500] if payload.content else payload.title,
+        source=payload.source,
+        published_date=payload.published_at,
+        category=category,
+        sentiment_score=sentiment['sentiment_score'],
+        sentiment_label=sentiment['sentiment_label'],
+        confidence_score=sentiment['confidence_score'],
+        keywords=json.dumps(keywords),
+        processed=True
+    )
+    
+    db.add(article)
+    db.commit()
+    
+    # Broadcast via WebSocket
+    await manager.broadcast_new_article(article.to_dict(), category)
+    
+    logger.info(f"Processed webhook article: {payload.title}")
+
 
 @app.get("/api/health")
 async def health_check():
